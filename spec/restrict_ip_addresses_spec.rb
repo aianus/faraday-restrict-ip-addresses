@@ -16,7 +16,7 @@ describe Faraday::RestrictIPAddresses do
     # garbage data like we expect.
     return_addresses = ['garbage', [], 30]
     return_addresses += ips
-    Socket.expects(:gethostbyname).with(url.host).returns(return_addresses)
+    expect(Socket).to receive(:gethostbyname).with(url.host).once.and_return(return_addresses)
 
     env = { url: url }
     @rip.call(env)
@@ -38,14 +38,6 @@ describe Faraday::RestrictIPAddresses do
 
       allowed '7.255.255.255'
       denied  '8.0.0.1'
-    end
-
-    it "disallows addresses when any IP address is disallowed" do
-      middleware deny: ["8.0.0.0/8"]
-
-      denied '10.0.0.10', '8.8.8.8'
-      allowed '10.0.0.10'
-      denied '10.0.0.10', '8.8.8.8'
     end
 
     it "blacklists RFC1918 addresses" do
@@ -92,4 +84,48 @@ describe Faraday::RestrictIPAddresses do
       denied  '192.168.13.14'
     end
 
+  context "DNS Pinning" do
+    context "resolvable" do
+      before :each do
+        return_addresses = ['garbage', [], 30]
+        return_addresses += [IPAddr.new('169.254.169.254').hton]
+        expect(Socket).to receive(:gethostbyname).and_return(return_addresses)
+        middleware
+      end
+
+      it "rewrites hostname" do
+        url = URI.parse("http://test.com/ipn/endpoint")
+        env = { url: url }
+        new_env = @rip.call(env)
+        expect(new_env[:url].to_s).to eq("http://169.254.169.254/ipn/endpoint")
+        expect(new_env[:request_headers]['Host']).to eq("test.com:80")
+      end
+
+      it "preserves custom port" do
+        url = URI.parse("http://test.com:1999/ipn/endpoint")
+        env = { url: url }
+        new_env = @rip.call(env)
+        expect(new_env[:url].to_s).to eq("http://169.254.169.254:1999/ipn/endpoint")
+        expect(new_env[:request_headers]['Host']).to eq("test.com:1999")
+      end
+
+      it "has empty host header for IP address hostname" do
+        url = URI.parse("http://169.254.169.254:1999/ipn/endpoint")
+        env = { url: url }
+        new_env = @rip.call(env)
+        expect(new_env[:url].to_s).to eq("http://169.254.169.254:1999/ipn/endpoint")
+        expect(new_env[:request_headers]['Host']).to eq("")
+      end
+    end
+
+    context "unresolvable" do
+      it "throws error if hostname is unresolvable" do
+        expect(Socket).to receive(:gethostbyname).and_return([])
+        middleware
+        url = URI.parse("http://nonexistant.com/ipn/endpoint")
+        env = { url: url }
+        expect{@rip.call(env)}.to raise_error(Faraday::ConnectionFailed)
+      end
+    end
+  end
 end
