@@ -42,12 +42,13 @@ module Faraday
     end
 
     def call(env)
+      env = pin_dns(env)
       raise AddressNotAllowed.new "Address not allowed for #{env[:url]}" if denied?(env)
       @app.call(env)
     end
 
     def denied?(env)
-      addresses(env[:url].host).any? { |a| denied_ip?(a) }
+      denied_ip?(IPAddr.new(env[:url].hostname))
     end
 
     def denied_ip?(address)
@@ -60,6 +61,22 @@ module Faraday
 
     def addresses(hostname)
       Socket.gethostbyname(hostname).map { |a| IPAddr.new_ntoh(a) rescue nil }.compact
+    end
+
+    def pin_dns(env)
+      host = env[:url].hostname
+      port = env[:url].port
+      resolved_address = addresses(host).sample
+      raise Faraday::ConnectionFailed.new "Failed to resolve DNS for #{host}" if resolved_address.nil?
+      env[:url].hostname = resolved_address.to_string
+      env[:request_headers] ||= {}
+      env[:request_headers]['Host'] =
+        if (IPAddr.new(host) rescue nil)
+          ''
+        else
+          "#{host}:#{port}"
+        end
+      env
     end
   end
   Request.register_middleware restrict_ip_addresses: lambda { RestrictIPAddresses }
