@@ -76,6 +76,7 @@ module Faraday
         else
           "#{host}:#{port}"
         end
+      env[:ssl][:sni_host] = host if env[:ssl]
       env
     end
   end

@@ -116,6 +116,13 @@ describe Faraday::RestrictIPAddresses do
         expect(new_env[:url].to_s).to eq("http://169.254.169.254:1999/ipn/endpoint")
         expect(new_env[:request_headers]['Host']).to eq("")
       end
+
+      it "sets the SSL SNI hostname option" do
+        url = URI.parse("https://test.com/ipn/endpoint")
+        env = { url: url, ssl: {verify: true} }
+        new_env = @rip.call(env)
+        expect(new_env[:ssl][:sni_host].to_s).to eq("test.com")
+      end
     end
 
     context "unresolvable" do
