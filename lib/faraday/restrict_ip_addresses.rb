@@ -74,7 +74,7 @@ module Faraday
         if (IPAddr.new(host) rescue nil)
           ''
         else
-          "#{host}:#{port}"
+          "#{host}"
         end
       env[:ssl][:sni_host] = host if env[:ssl]
       env
