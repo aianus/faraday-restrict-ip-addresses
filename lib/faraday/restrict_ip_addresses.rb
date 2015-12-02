@@ -42,13 +42,7 @@ module Faraday
     end
 
     def call(env)
-      env = pin_dns(env)
-      raise AddressNotAllowed.new "Address not allowed for #{env[:url]}" if denied?(env)
-      @app.call(env)
-    end
-
-    def denied?(env)
-      denied_ip?(IPAddr.new(env[:url].hostname))
+      @app.call(pin_dns(env))
     end
 
     def denied_ip?(address)
@@ -64,10 +58,19 @@ module Faraday
     end
 
     def pin_dns(env)
+      scheme = env[:url].scheme
       host = env[:url].hostname
       port = env[:url].port
+
       resolved_address = addresses(host).sample
       raise Faraday::ConnectionFailed.new "Failed to resolve DNS for #{host}" if resolved_address.nil?
+      raise AddressNotAllowed.new "Address not allowed for #{env[:url]}" if denied_ip?(resolved_address)
+
+      # If the scheme is HTTPS, and SSL verification is on, we shouldn't pin
+      # We are safe from DNS rebinding in this case since SSL validation will fail
+      # if it's an internal endpoint not matching the hostname used for rebinding
+      return env if scheme == "https" && env[:ssl][:verify]
+
       env[:url].hostname = resolved_address.to_string
       env[:request_headers] ||= {}
       env[:request_headers]['Host'] =
