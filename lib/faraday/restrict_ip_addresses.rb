@@ -73,12 +73,7 @@ module Faraday
 
       env[:url].hostname = resolved_address.to_string
       env[:request_headers] ||= {}
-      env[:request_headers]['Host'] =
-        if (IPAddr.new(host) rescue nil)
-          ''
-        else
-          "#{host}"
-        end
+      env[:request_headers]['Host'] = host
       env[:ssl][:sni_host] = host if env[:ssl]
       env
     end
