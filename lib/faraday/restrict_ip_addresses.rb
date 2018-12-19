@@ -54,7 +54,8 @@ module Faraday
     end
 
     def addresses(hostname)
-      Socket.gethostbyname(hostname).map { |a| IPAddr.new_ntoh(a) rescue nil }.compact
+      raw_results = Socket.gethostbyname(hostname) rescue []
+      raw_results.map { |a| IPAddr.new_ntoh(a) rescue nil }.compact
     end
 
     def pin_dns(env)
